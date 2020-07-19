@@ -42,7 +42,7 @@ Through the random **energy** fluctuations we should see the distribution evolve
 
 
 ### Neuron model
-We hope that the envionment will create complex patterns, from this we want those patterns to behave like a neuron does.
+We hope that the envionment will create complex patterns, once we have this we want those patterns to behave like a neuron does.
 
 Neurons:
 - Transmit information by sending electrical impulses as a **spike** in electrical potential
