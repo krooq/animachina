@@ -25,12 +25,13 @@ class World:
     def update(self):
         # select a batch of random cell's (maybe all?)
             # increase the selected cell's energy by some small amount
-            add = np.random.choice([0,1], *self.environment.shape, p=[0.75, 0.25])
+            add = np.random.choice(np.array([0,1], dtype=np.uint8), self.environment.shape, p=[0.75, 0.25])
             self.environment += add
         # select a batch of random cell's (maybe all?)
             # decrease the selected cell's energy by some small amount
-            rem = np.random.choice([0,1], *self.environment.shape, p=[0.75, 0.25])
-            self.environment -= rem
+            # rem = np.random.choice(np.array([0,1], dtype=np.uint8), *self.environment.shape, p=[0.75, 0.25])
+            # self.environment -= rem
+
         # select a batch of random cell's (maybe all?)
             # transfer a random % of that cell's energy to an adjacent cell
             # tfr = np.random.choice([0,1], *self.environment.shape, p=[0.75, 0.25])
@@ -76,7 +77,10 @@ class Animachina(App):
     def update(self, dt):
         self.world.update()
         (h, w) = Window.size
-        self.pbuffer[:, :] = [255, 255, 255, 255]
+        self.pbuffer = np.full((128,128, 4), [128,128,128,255], dtype=np.uint8)
+        self.pbuffer[:,:] = self.world.environment[:,:,None]
+        # self.pbuffer = self.world.environment[:,:]
+        print(self.pbuffer)
         self.view.update(self.pbuffer, self.pbuffer.shape[:2], (h, w))
 
     def build(self):
