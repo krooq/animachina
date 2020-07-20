@@ -33,7 +33,7 @@ Through transfer of **energy** entities will be able to change their **position*
 
 #### Stochasticity
 So we add no bias, the selection process should occur randomly.
-To acomplish this we will add/remove random entities to the envionment at some variable rate, this is analagous to the sun shining on the surface of the earth and the surface of the earth emitting radiation to space.
+To acomplish this we will add/remove random **energy** to the envionment at some variable rate, this is analagous to the sun shining on the surface of the earth and the surface of the earth emitting radiation to space.
 We can control this variable rate to increase or decrease the available **energy** and see what happens.
 
 #### Interpretation
