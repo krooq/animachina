@@ -50,6 +50,7 @@ class TextureBuffer(Widget):
 
     def paint(self, pixel_buffer):
         self.texture.blit_buffer(pixel_buffer.flatten(), colorfmt="rgba")
+        self.canvas.ask_update()
 
 
 class Animachina(App):
@@ -61,7 +62,6 @@ class Animachina(App):
     def update(self, dt):
         # (height, width) = Window.size
         self.blue += 10 * dt / 60
-        print(255 * self.blue % 255)
         self.pixel_buffer[:, :] = [255, 128, int(255 * self.blue % 255), 255]
         self.view.paint(self.pixel_buffer)
 
