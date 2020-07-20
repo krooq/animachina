@@ -21,17 +21,17 @@ class TextureBuffer(Widget):
     def __init__(self, pixel_buffer, texture_size, **kwargs):
         super(TextureBuffer, self).__init__(**kwargs)
         self.update(pixel_buffer, texture_size)
-        with self.canvas:
-            self.rect = Rectangle(
-                texture=self.texture, pos=self.pos, size=self.texture_size
-            )
 
     def update(self, pixel_buffer, texture_size):
         self.texture = Texture.create(size=texture_size)
-        self.texture.blit_buffer(pixel_buffer.flatten(), colorfmt="rgba")
-        if self.rect is not None:
-            self.rect.texture = self.texture
-            self.rect.size = self.texture.size
+        self.texture.blit_buffer(pixel_buffer.tostring(), colorfmt="rgba")
+        with self.canvas:
+            self.rect = Rectangle(
+                texture=self.texture, pos=self.pos, size=self.texture.size
+            )
+        # if self.rect is not None:
+        #     self.rect.texture = self.texture
+        #     self.rect.size = self.texture.size
         self.canvas.ask_update()
 
 
@@ -42,9 +42,11 @@ class Animachina(App):
     pixel_buffer = None
 
     def update(self, dt):
+        (h, w) = Window.size
         self.blue += 10 * dt / 60
+        self.pixel_buffer = np.zeros([h, w, 4], dtype=np.uint8)
         self.pixel_buffer[:, :] = [255, 128, int(255 * self.blue % 255), 255]
-        self.view.update(self.pixel_buffer, Window.size)
+        self.view.update(self.pixel_buffer, (h, w))
 
     def build(self):
         (height, width) = Window.size
