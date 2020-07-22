@@ -58,6 +58,11 @@ class World:
         self.environment = data
 
     def update(self):
+        # select all neurons that ...
+
+
+
+
         # select a batch of random cell's (maybe all?)
             # increase the selected cell's energy by some small amount
         # select a batch of random cell's (maybe all?)
