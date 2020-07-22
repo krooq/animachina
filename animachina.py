@@ -7,16 +7,38 @@ from kivy.graphics import Rectangle, Color, Fbo, Canvas
 from kivy.graphics.texture import Texture
 from kivy.clock import Clock
 from kivy.core.window import Window
-
 from array import array
 
 import numpy as np
 import time
 import sys
 
+import cv2
+
 rng = np.random.default_rng()
 f32 = np.float32
+i32 = np.int32
+u32 = np.uint32
 u8 = np.uint8
+
+class FrameMonitor:
+    ''' Logs frame time. '''
+    def __init__(self):
+        self.frame_time = 0
+        self.frame_number = 0
+
+    def __enter__(self):
+        self.frame_number += 1
+        self.frame_number %= 30
+        self.frame_start = time.time_ns()
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        if self.frame_number == 0:
+            self.frame_time = (self.frame_time + (time.time_ns() - self.frame_start) / 1000000)/2
+            sys.stdout.write("frame_time = {:3.9f} ms\r".format(self.frame_time))
+            sys.stdout.flush()
+
+frame_monitor = FrameMonitor()
 
 def fbounds(dtype):
     ''' Bounds for a floating point data type. '''
@@ -31,36 +53,45 @@ def dist(a):
     return np.array(a)/np.sum(a)
 
 class World:
-    def __init__(self, height, width):
-        self.size = (height, width)
-        self.environment = np.zeros(self.size, dtype=f32)
+    def __init__(self, data: np.ndarray):
+        self.shape = data.shape
+        self.environment = data
 
     def update(self):
         # select a batch of random cell's (maybe all?)
             # increase the selected cell's energy by some small amount
-            add = np.random.choice(np.array([-1,0,1]), self.environment.shape, p=dist([1,4,1]))
+        # select a batch of random cell's (maybe all?)
+            # decrease the selected cell's energy by some small amount
+            add = np.random.choice(np.array([-1,0,1]), self.environment.shape, p=dist([1,10,1]))
             add = add * rng.random(self.environment.shape, dtype=f32)
             self.environment = np.array(np.add(add, self.environment).clip(0, np.finfo(f32).max), dtype=f32)
 
         # select a batch of random cell's (maybe all?)
-            # decrease the selected cell's energy by some small amount
-            # rem = np.random.choice(np.array([0,1], dtype=np.uint16), self.environment.shape, p=[0.75, 0.25])
-            # self.environment = np.array(np.subtract(self.environment, rem).clip(0,255), dtype=np.uint8)
-
-        # select a batch of random cell's (maybe all?)
             # transfer a random % of that cell's energy to an adjacent cell
-            # tfr = np.random.choice([0,1], self.environment.shape, p=dist([10, 1]))
-            # tfr = tfr * rng.random(self.environment.shape, dtype=np.float32)
-            # tfr = tfr * self.environment
+            tfr = np.random.choice([0,1], self.environment.shape, p=dist([10, 1]))
+            tfr = tfr * rng.random(self.environment.shape, dtype=f32) * self.environment
+
             # print(tfr)
-            # self.environment = np.array(np.subtract(self.environment, tfr).clip(0,255), dtype=np.uint8)
-            # self.environment -= tfr
-            # mask = np.ma.masked_values(tfr, 0)
-            # tfr = tfr[mask]
+            self.environment = np.array(np.subtract(self.environment, tfr).clip(0, np.finfo(f32).max), dtype=f32)
+
+            # I think this is working and its faster but can be way more efficient
+            indices = tfr.nonzero() #.astype(np.uint32)
+            print(np.indices(self.environment.shape).shape)
+            values = tfr[indices]
+            # this especially can be more effcient
+            offsets = rng.standard_normal(size=tfr.shape).clip(-1,1).round().flatten().take(indices).astype(i32)
+            offsets = (offsets[0], offsets[1])
+            # This clipping assumes a square environment
+            neighbors = np.add(offsets, indices).clip(0,self.environment.shape[0] - 1)
+            neighbors = (neighbors[0], neighbors[1])
+            self.environment[neighbors] += values
+
+
+            # I think this was working but it was slow
             # for (x, y), value in np.ndenumerate(tfr):
-            #     dx = np.random.choice([-1,1], (1,1))
-            #     s = rng.standard_normal(size=(1,1))
-            #     if 0 <= x <= self.environment.shape[0]:
+            #     (dx,dy) = np.add(rng.standard_normal(size=(2)).round(), (x,y)).clip(0,self.environment.shape[0]-1).astype(np.uint32)
+            #     self.environment[dx,dy] += value
+
 
 
 class TextureBuffer(Widget):
@@ -73,6 +104,8 @@ class TextureBuffer(Widget):
     def update(self, pixel_buffer, texture_size, canvas_size=None):
         canvas_size = texture_size if canvas_size is None else canvas_size
         self.texture = Texture.create(size=texture_size)
+        self.texture.mag_filter = 'nearest'
+        self.texture.min_filter = 'nearest'
         self.texture.blit_buffer(pixel_buffer.tobytes(), colorfmt="rgba")
         self.canvas.clear()
         with self.canvas:
@@ -84,28 +117,28 @@ class TextureBuffer(Widget):
 
 class Animachina(App):
 
-    def __init__(self, **kwargs):
+    def __init__(self, persistent_data, **kwargs):
         super(Animachina, self).__init__(**kwargs)
-        self.frame_monitor = FrameMonitor()
-        self.world = World(256,256)
-        self.pbuffer = rgba(*self.world.size)
+        self.persistent_data = persistent_data
+        self.world = World(persistent_data.data)
+        self.pbuffer = rgba(*self.world.shape)
         self.view = None
         # self._keyboard = Window.request_keyboard(self._keyboard_closed, self, 'text')
 
     def update(self, dt):
-        with self.frame_monitor:
+        with frame_monitor:
             self.world.update()
-            speed = 10
-            self.pbuffer = speed * np.full((*self.world.size, 4), [1,1,1,1], dtype=f32)
+            self.persistent_data.data = self.world.environment
+            scale = 256/16
+            self.pbuffer = scale * np.full((*self.world.shape, 4), [1,1,1,1], dtype=f32)
             self.pbuffer[:,:] *= self.world.environment[:,:,None]
             self.pbuffer = self.pbuffer.clip(0,255).astype(u8)
-            # print(self.pbuffer)
-            # self.pbuffer = self.world.environment[:,:]
-            # print(self.pbuffer)
             self.view.update(self.pbuffer, self.pbuffer.shape[:2], Window.size)
 
 
     def build(self):
+        Window.size = (512,512)
+        Window.left = 100
         self.view = TextureBuffer(self.pbuffer, self.pbuffer.shape[:2])
         Clock.schedule_interval(self.update, 0)
         return self.view
@@ -127,21 +160,28 @@ class Animachina(App):
     #     # Return True to accept the key. Otherwise, it will be used by the system.
     #     return True
 
-class FrameMonitor:
-    def __init__(self):
-        self.frame_time = 0
-        self.frame_number = 0
+
+class PersistentData:
+    ''' Loads and saves data in image formats. '''
+    def __init__(self, load_path=None, save_path=None):
+        self.load_path = load_path
+        self.data = cv2.imread(load_path, cv2.IMREAD_UNCHANGED) if load_path is not None else None
+        if self.data is not None:
+            self.data = cv2.flip(self.data,0)
+        self.save_path = save_path if save_path is not None else load_path
 
     def __enter__(self):
-        self.frame_number += 1
-        self.frame_number %= 30
-        self.frame_start = time.time_ns()
+        pass
 
     def __exit__(self, exc_type, exc_value, traceback):
-        if self.frame_number == 0:
-            self.frame_time = (self.frame_time + (time.time_ns() - self.frame_start) / 1000000)/2
-            sys.stdout.write("frame_time = {:3.9f} ms\r".format(self.frame_time))
-            sys.stdout.flush()
+        self.data = cv2.flip(self.data, 0)
+        cv2.imwrite(self.save_path, self.data)
 
 if __name__ == "__main__":
-    Animachina().run()
+    # NOTE: Saved image will be flipped vertically to correct for OpenGL NDC data coordinates, this may make calculations confusing.
+    persistent_data = PersistentData(load_path="data/world.png")
+    if persistent_data.data is None:
+        persistent_data.data = np.zeros((256,256), dtype=f32)
+
+    with persistent_data:
+        Animachina(persistent_data).run()

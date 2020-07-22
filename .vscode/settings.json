@@ -1,3 +1,76 @@
 {
-    "python.pythonPath": "C:\\Users\\Krooq\\main\\tools\\python\\miniconda3\\envs\\animachina\\python.exe"
+    "python.pythonPath": "C:\\Users\\Krooq\\main\\tools\\python\\miniconda3\\envs\\animachina\\python.exe",
+    "workbench.colorCustomizations": {
+        // These are the defaults anyway
+        "editor.foreground": "#d4d4d4",
+        "editor.background": "#1e1e1e",
+    },
+    // Instances are white
+    // Definitions are yellow
+    // Constants/Built-in characters are yellow (e.g. None, slices)
+    // Operations are blue
+    // Keywords are blue
+    // Assignment operators are blue
+    // Separators are grey
+    // Comments are grey
+    // Strings are grey
+    // Special variables are grey (but could be whatever)
+    "editor.tokenColorCustomizations": {
+        "comments": "#858585",
+        "keywords": "#3c78aa",
+        "variables": "#d4d4d4",
+        "functions": "#fdd835",
+        "types": "#fdd835",
+        "strings": "#858585",
+        "numbers": "#d4d4d4",
+        "textMateRules": [
+            {
+                "scope": [
+                    "punctuation.separator.period.python",
+                    "punctuation.separator.element.python",
+                    "punctuation.separator.parameters.python",
+                    "variable.parameter.function.language.special.self.python",
+                    "variable.language.special.self.python",
+                ],
+                "settings": {
+                    "foreground": "#858585"
+                }
+            },
+            {
+                "scope": [
+                    "keyword.codetag",
+                    "keyword.operator",
+                    "keyword.operator.logical.python",
+                    "entity.other.inherited-class",
+                    "meta.function-call.generic.python",
+                    "punctuation.definition.arguments.begin.python",
+                    "punctuation.definition.arguments.end.python",
+                    "support.function.builtin.python",
+                    // This one is just for the settings.json
+                    "support.type.property-name",
+                ],
+                "settings": {
+                    "foreground": "#3c78aa"
+                }
+            },
+            {
+                "scope": [
+                    "support.variable.magic.python",
+                    "punctuation.definition",
+                    "constant.language",
+                    "constant.character",
+                    "constant.character.escape",
+                    "punctuation.parenthesis.begin.python",
+                    "punctuation.parenthesis.end.python",
+                    "punctuation.separator.slice.python",
+                    "punctuation.section.class.begin.python",
+                    "punctuation.section.function.begin.python",
+                    "punctuation.separator.colon.python",
+                ],
+                "settings": {
+                    "foreground": "#fdd835"
+                }
+            },
+        ],
+    },
 }
