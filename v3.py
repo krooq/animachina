@@ -146,12 +146,12 @@ class Model:
     '''
     def __init__(self, shape, nb_outputs=1, metric='chebyshev'):
         self.shape          = np.array(shape)
-        self.baseline       = 0.00 * np.ones(self.shape)
+        self.baseline       = 0
+        self.threshold      = 0.5
+        self.stability      = 0.99
+
         self.potential      = 0.00 * np.ones(self.shape)
-        self.threshold      = 0.50 * np.ones(self.shape)
         self.affinities     = 0.50 * np.ones(self.shape + [nb_outputs])
-        self.stability      = 0.99 * np.ones(self.shape)
-        
         self.position       = np.array([i for i in np.ndindex(shape)])
         self.distance       = squareform(pdist(self.position, metric))
         self.nb_neurons     = self.position.shape[0]
@@ -198,8 +198,9 @@ class Model:
         new_affinities = self.affinities.copy()
         new_potential = self.potential.copy()
         # Set activated potentials back to baseline value
-        # new_potential[self.potential > self.threshold] = self.baseline
-        # print(new_potential)
+        new_potential[self.potential > self.threshold] = self.baseline
+
+        print(new_potential)
         # np.where(self.potential > self.threshold, self.baseline, self.potential)
         # new_affinities = np.where(self.potential > self.threshold, self.affinities, self.affinities)
         # print(new_affinities)
