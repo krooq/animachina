@@ -139,23 +139,26 @@ def repr3d(arr, name="arr"):
     return "---------------------\n{}: {}\n{}\n".format(name, arr.shape, arrfmt)
 
 class Model:
-    def __init__(self, shape, nb_inputs=1, nb_outputs=1):
+    ''' A spiking neural net model. 
+    '''
+    def __init__(self, shape, nb_inputs=1, nb_outputs=1, metric='chebyshev'):
         self.shape          = shape
-        self.baseline       = 0.0 * np.ones(self.shape)
-        self.potential      = 0.0 * np.ones(self.shape)
-        self.threshold      = 0.5 * np.ones(self.shape)
-        self.affinities     = 0.5 * np.ones(self.shape)
-        self.stability      = 0.5 * np.ones(self.shape)
+        self.baseline       = 0.00 * np.ones(self.shape)
+        self.potential      = 0.00 * np.ones(self.shape)
+        self.threshold      = 0.50 * np.ones(self.shape)
+        self.affinities     = 0.50 * np.ones(self.shape)
+        self.stability      = 0.99 * np.ones(self.shape)
         indices = np.array([i for i in np.ndindex(shape)])
-        distances = squareform(pdist(indices, 'chebyshev'))
-        # list of index neighbourhoods of distance exactly 1
-        # e.g. index_neighbourhoods[0] is a list of indices that are exactly 1 away from indices[0] 
-        #  if not np.mod(shape, idx).any()
+        distances = squareform(pdist(indices, metric))
+        # A list of index neighbourhoods of distance exactly 1 from the corresponding index.
+        # e.g. index_neighbourhoods[0] is a list of indices that are exactly 1 unit away from indices[0] 
         index_neighbourhoods = [
             indices[(distances[idx] - 1) == 0] 
                 for idx in range(indices.shape[0])
+                # This line ensures that edge indices do not have any inputs.
+                # This is required so that the input arrays can be the same size for numpy.
+                    if np.mod(indices[idx], np.array(shape) - 1).all()
         ]
-        # maybe filtering?
         self.inputs = rng.choice(index_neighbourhoods, (indices.shape[0], nb_inputs))
 
     def __repr__(self):
@@ -167,27 +170,49 @@ class Model:
     def asarray(self):
         return [self.baseline, self.potential, self.threshold, self.affinities, self.stability]
 
-def update(model):
-    [baseline, potential, threshold, affinities, stability] = model.asarray()
-    new_potential = potential.copy()
-    new_affinities = affinities.copy()
-    # activation_mask = (potential > threshold).astype(int)
-    new_potential = potential.where(potential > threshold, baseline, potential)
+# if potential[n] > threshold[n]:
+#   potential[n] = baseline[n]                                                      # normally neurons have a refractory period, perhaps a refractory period can regulate repeated stimulation
+#   potential[o] += amplitude[n] * affinities[o][n]                                 # this should scale with number of input/output neurons
+#   affinities[n][i] *= (1 - plasticity[i]) * (1 + potential[o] - threshold[o])     # careful, will have to clamp to minimum or dropout and clamp max as well
+# 
+# affinities[n][i] *= (1 - elasticity[n])                                           # this one will require a lot of tuning
+# potential[n] *= (1 - stability[n])                                                # this one will require some tuning
 
-    if potential > threshold:
-        # new_potential[n] = baseline[n]                                                     
-        new_potential[o] += affinities[o][n]                            
-        new_affinities[n][i] *= (1 + potential[o] - threshold[o])
+    def update(self):
+        ''' Spiking neuron update algorithm:
+            ** performed immutably **
+                for each activated neuron
+                    # set activated neuron potential back to the baseline
+                    new.activated.potential = baseline
+                    # increase output neuron potential
+                    new.output.potential += activated.amplitude * output.affinity
+                    # update activated neuron affinities (why do this only for activated neurons? good question)
+                    new.activated.affinities += (1 + new.output.potential - output.threshold)
+                # decrease all neuron potentials
+                new.potential -= (1 - stability)
+        '''
+        new_affinities = self.affinities.copy()
+        
+        # Set activated potentials back to baseline value
+        new_potential = np.where(self.potential > self.threshold, self.baseline, self.potential)
 
-    new_potential[n] *= (1 - stability[n])
-    return [new_potential, new_affinities]
+        if self.potential > self.threshold:                                            
+            new_potential[o] += affinities[o][n]                            
+            new_affinities[n][i] *= (1 + potential[o] - threshold[o])
+
+        new_potential *= (1 - self.stability)
+
+        # Do the update
+        self.potential = new_potential
+        self.affinities = new_affinities
 
 # distance metrics:
 #   chebyshev
 #   cityblock / manhattan
 
 def run():
-    model = Model((4,4), 1)
+
+    # model = Model((4,4), 1)
     pass
     # [baseline_0, potential_0, threshold_0, affinities_0, stability_0] = 
     # model = Model(16, 2)
