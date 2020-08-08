@@ -144,28 +144,26 @@ def ndbg(ndarray, label=""):
 class Model:
     ''' A spiking neural net model. 
     '''
-    def __init__(self, shape, nb_outputs=1, metric='chebyshev'):
+    def __init__(self, shape, metric='chebyshev'):
         self.shape          = np.array(shape)
         self.baseline       = 0
         self.threshold      = 0.5
         self.stability      = 0.99
 
         self.potential      = 0.00 * np.ones(self.shape)
-        self.affinities     = 0.50 * np.ones(self.shape + [nb_outputs])
         self.position       = np.array([i for i in np.ndindex(shape)])
         self.distance       = squareform(pdist(self.position, metric))
         self.nb_neurons     = self.position.shape[0]
         # A list of positions adjacent to each neuron.
         # e.g. adjacent[0] is a list of positions that are exactly 1 unit away from position[0]
-        adjacents = [
-            self.position[(self.distance[n] - 1) == 0] 
-                for n in range(self.nb_neurons)
-                # This line ensures that positions on the edges of the model 
-                # are not output positions (although they may still receive outputs).
-                # This is required so that the output arrays are all the same size for numpy.
-                    if np.mod(self.position[n], np.array(self.shape) - 1).all()
-        ]
-        self.outputs = rng.choice(adjacents, (self.nb_neurons, nb_outputs))
+        adjacents           = [self.position[(self.distance[n] - 1) == 0] 
+                                    for n in range(self.nb_neurons)
+                                    # This line ensures that positions on the edges of the model 
+                                    # are not output positions (although they may still receive outputs).
+                                    # This is required so that the output arrays are all the same size for numpy.
+                                        if np.mod(self.position[n], np.array(self.shape) - 1).all()]
+        self.outputs        = rng.choice(adjacents, self.nb_neurons)
+        self.affinities     = 0.50 * np.ones(self.outputs.shape)
 
     def __repr__(self):
         return "{}\n{}".format(
@@ -199,10 +197,14 @@ class Model:
         new_potential = self.potential.copy()
         # Set activated potentials back to baseline value
         new_potential[self.potential > self.threshold] = self.baseline
+        # Increase output neuron potentials
+        print(self.outputs.shape)
+        print(self.potential.shape)
+        print(self.outputs[self.potential.flatten() > self.threshold,:])
 
-        print(new_potential)
-        # np.where(self.potential > self.threshold, self.baseline, self.potential)
-        # new_affinities = np.where(self.potential > self.threshold, self.affinities, self.affinities)
+        # print(new_affinities.shape)
+        # new_affinities[self.potential > self.threshold] = self.affinities
+
         # print(new_affinities)
 
         # if self.potential > self.threshold:                                            
@@ -219,7 +221,7 @@ def run(model, iterations):
     for _ in range(iterations):
         model.update()
 
-run(model=Model((4,4), 1), iterations=10)
+run(model=Model((4,4)), iterations=10)
 
 
 # cv2.imshow("img", image_sensor())
