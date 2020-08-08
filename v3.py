@@ -148,10 +148,15 @@ class Model:
         self.stability      = 0.5 * np.ones(self.shape)
         indices = np.array([i for i in np.ndindex(shape)])
         distances = squareform(pdist(indices, 'chebyshev'))
-        inputs = rng.choice(indices, (indices.shape[0], nb_inputs))
         # list of index neighbourhoods of distance exactly 1
         # e.g. index_neighbourhoods[0] is a list of indices that are exactly 1 away from indices[0] 
-        index_neighbourhoods = [indices[(distances[idx] - 1) == 0] for idx in range(indices.shape[0])]
+        #  if not np.mod(shape, idx).any()
+        index_neighbourhoods = [
+            indices[(distances[idx] - 1) == 0] 
+                for idx in range(indices.shape[0])
+        ]
+        # maybe filtering?
+        self.inputs = rng.choice(index_neighbourhoods, (indices.shape[0], nb_inputs))
 
     def __repr__(self):
         return "{}\n{}".format(
