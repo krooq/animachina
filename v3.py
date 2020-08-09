@@ -151,6 +151,7 @@ class Model:
         self.threshold      = 0.50
         self.stability      = 0.99
         self.amplitude      = 0.50
+        self.plasticity     = 0.05
         self.potential      = np.zeros(self.shape).flatten()
         self.position       = np.array([i for i in np.ndindex(self.shape)])
         self.neuron         = np.arange(self.position.shape[0])
@@ -199,12 +200,17 @@ class Model:
         # Set activated potentials back to baseline value
         new_potential[activated] = self.baseline
         # Increase output neuron potentials
-        # print(self.outputs.shape)
-        # print(self.potential.shape)
-        # new_potential[activated] += 
-        # print(self.outputs[activated,:].shape)
-        # print(new_potential[activated].shape)
-        # print(new_potential[self.outputs[activated,:]])
+        new_potential[self.outputs[activated]] += self.amplitude * self.affinities[activated]
+        # Update activated neuron affinities
+        new_affinities[activated] += (self.plasticity * (1 + new_potential[self.outputs[activated]] - self.threshold))
+
+        ndbg(self.affinities, "aff")
+        ndbg(new_affinities, "new aff")
+
+        # ndbg(self.outputs[activated, :], "out")
+        # ndbg(self.potential[activated], "pot")
+        # ndbg(, "pot[out]")
+        # print()
         # print(self.potential[])
         # self.affinities[activated,:]  +=  += self.amplitude * 
 
@@ -227,6 +233,13 @@ class Model:
 def run(model, iterations):
     # FIXME: hack to get some activated neurons
     model.potential = np.arange(model.size) / model.size
+    # x = np.arange(4)
+    # y = np.array([[1,2],[2,2],[3,2],[4,2]])
+    # print(y[:,0])
+    # y0 = np.arange(4)
+    # yy = y[:,np.newaxis]
+    # yy[:,:] = y0
+    # print(yy)
     for _ in range(iterations):
         model.update()
 
