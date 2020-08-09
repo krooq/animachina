@@ -101,8 +101,8 @@ def image_actuator(stm, ltm):
 # affinities: (j,) [0,1]            # ease at which this neuron responds to input signals       
 # amplitude : ()   [0,1]            # how much this neuron affects downstream neurons
 # elasticity: ()   [0,1]            # rate at which plastified afinities decay without stimulation
-# plasticity: ()   [0,1]            # rate at which affinities change when stimulated                       
-# stability : ()   [0,1]            # resistance to potential decay i.e. affects potential
+# plasticity: ()   [0,1]            # rate at which affinities change when stimulated (akin to learning rate)         
+# stability : ()   [0,1]            # resistance to potential decay i.e. affects potential (expected to be a function of plasticity)
 
 
 class Defaults:
@@ -132,19 +132,22 @@ class Defaults:
 rng = np.random.default_rng()
 
 def reprnd(arr, name="arr"):
-    return "---------------------\n{}: {}\n{}\n".format(name, arr.shape, arr.__repr__())
+    return "-------------------------------\n{}: {}\n{}\n".format(name, arr.shape, arr.__repr__())
 
 def repr3d(arr, name="arr"):
     arrfmt = "\n\n".join(["z=" + str(z) + "\n" + arr[...,z].__repr__() for z in range(arr.shape[2])])
-    return "---------------------\n{}: {}\n{}\n".format(name, arr.shape, arrfmt)
+    return "-------------------------------\n{}: {}\n{}\n".format(name, arr.shape, arrfmt)
 
 def ndbg(ndarray, label=""):
     print(reprnd(ndarray, label))
+        
+def banner(text):
+    print("{}\n{:^64}\n{}\n".format("=" * 64, text,"=" * 64))
 
 class Model:
     ''' A spiking neural net model. 
     '''
-    def __init__(self, shape, metric='cityblock'):
+    def __init__(self, shape, metric='chebyshev'):
         self.shape          = shape
         self.size           = np.zeros(shape).size
         self.baseline       = 0.00
@@ -158,7 +161,7 @@ class Model:
         self.distance       = squareform(pdist(self.position, metric))
         # A list of adjacent neurons for each neuron.
         # e.g. adjacent[0] is a list of neuron indexes that are exactly 1 unit away from position[0]
-        adjacents           = np.array([self.neuron[(self.distance[n] - 1) == 0] for n in self.neuron
+        adjacents           = np.array([self.neuron[self.distance[n] <= 1] for n in self.neuron
                                     # This line ensures that positions on the edges of the model 
                                     # are not output positions (although they may still receive outputs).
                                     # This is required so that the output arrays are all the same size for numpy.
@@ -192,7 +195,7 @@ class Model:
                     # (why do this only for activated neurons? good question)
                     new.activated.affinities += (1 + new.output.potential - output.threshold)
                 # decrease all neuron potentials
-                new.potential -= (1 - stability)
+                new.potential *= stability
         '''
         new_affinities = self.affinities.copy()
         new_potential = self.potential.copy()
@@ -202,48 +205,29 @@ class Model:
         # Increase output neuron potentials
         new_potential[self.outputs[activated]] += self.amplitude * self.affinities[activated]
         # Update activated neuron affinities
-        new_affinities[activated] += (self.plasticity * (1 + new_potential[self.outputs[activated]] - self.threshold))
-
-        ndbg(self.affinities, "aff")
-        ndbg(new_affinities, "new aff")
-
-        # ndbg(self.outputs[activated, :], "out")
-        # ndbg(self.potential[activated], "pot")
-        # ndbg(, "pot[out]")
-        # print()
-        # print(self.potential[])
-        # self.affinities[activated,:]  +=  += self.amplitude * 
-
-
-        # print(new_affinities.shape)
-        # new_affinities[self.potential > self.threshold] = self.affinities
-
-        # print(new_affinities)
-
-        # if self.potential > self.threshold:                                            
-        #     new_potential[o] += affinities[o][n]                            
-        #     new_affinities[n][i] *= (1 + potential[o] - threshold[o])
-
-        # new_potential *= (1 - self.stability)
-
-        # # Do the update
-        # self.potential = new_potential
-        # self.affinities = new_affinities
+        # TODO: clamp values to [epsilon,1] or some other gradient management
+        new_affinities[activated] += self.plasticity * (1 + new_potential[self.outputs[activated]] - self.threshold)
+        new_potential *= self.stability
+        # Push the update
+        self.potential = new_potential
+        self.affinities = new_affinities
 
 def run(model, iterations):
+    np.set_printoptions(linewidth=200)
+    banner("RUN BEGINS")
     # FIXME: hack to get some activated neurons
-    model.potential = np.arange(model.size) / model.size
-    # x = np.arange(4)
-    # y = np.array([[1,2],[2,2],[3,2],[4,2]])
-    # print(y[:,0])
-    # y0 = np.arange(4)
-    # yy = y[:,np.newaxis]
-    # yy[:,:] = y0
-    # print(yy)
+    model.potential[12] = 0.8
+    model.potential[13] = 0.6
+    # model.potential[9:11] = 1
+    ndbg(model.potential.copy().reshape(model.shape), "inital pot")
+    ndbg(model.outputs[12], "outputs[12]")
+    ndbg(model.outputs[13], "outputs[13]")
     for _ in range(iterations):
         model.update()
+        ndbg(model.potential.copy().reshape(model.shape), "new pot")
+        ndbg(model.affinities, "new aff")
 
-run(model=Model((4,4)), iterations=1)
+run(model=Model((5,5)), iterations=4)
 
 
 # cv2.imshow("img", image_sensor())
