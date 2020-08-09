@@ -149,19 +149,18 @@ class Model:
         self.baseline       = 0
         self.threshold      = 0.5
         self.stability      = 0.99
-
-        self.potential      = 0.00 * np.ones(self.shape)
+        self.potential      = np.zeros(self.shape).flatten()
         self.position       = np.array([i for i in np.ndindex(shape)])
         self.distance       = squareform(pdist(self.position, metric))
         self.nb_neurons     = self.position.shape[0]
         # A list of positions adjacent to each neuron.
         # e.g. adjacent[0] is a list of positions that are exactly 1 unit away from position[0]
-        adjacents           = [self.position[(self.distance[n] - 1) == 0] 
+        adjacents           = np.array([self.position[(self.distance[n] - 1) == 0] 
                                     for n in range(self.nb_neurons)
                                     # This line ensures that positions on the edges of the model 
                                     # are not output positions (although they may still receive outputs).
                                     # This is required so that the output arrays are all the same size for numpy.
-                                        if np.mod(self.position[n], np.array(self.shape) - 1).all()]
+                                        if np.mod(self.position[n], np.array(self.shape) - 1).all()])
         self.outputs        = rng.choice(adjacents, self.nb_neurons)
         self.affinities     = 0.50 * np.ones(self.outputs.shape)
 
@@ -198,9 +197,9 @@ class Model:
         # Set activated potentials back to baseline value
         new_potential[self.potential > self.threshold] = self.baseline
         # Increase output neuron potentials
-        print(self.outputs.shape)
-        print(self.potential.shape)
-        print(self.outputs[self.potential.flatten() > self.threshold,:])
+        # print(self.outputs.shape)
+        # print(self.potential.shape)
+        # print(self.outputs[self.potential.flatten() > self.threshold,:])
 
         # print(new_affinities.shape)
         # new_affinities[self.potential > self.threshold] = self.affinities
