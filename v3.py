@@ -3,6 +3,7 @@ import numpy as np
 import pyautogui
 from screeninfo import get_monitors
 from scipy.spatial.distance import pdist, squareform
+import time
 
 # # display screen resolution, get it from your OS settings
 # SCREEN_SIZE = (3840, 2160)
@@ -130,7 +131,7 @@ class Defaults:
 # potential[n] *= (1 - stability[n])                                                # this one will require some tuning
 
 rng = np.random.default_rng()
-
+epsilon = 1e-5
 def reprnd(arr, name="arr"):
     return "-------------------------------\n{}: {}\n{}\n".format(name, arr.shape, arr.__repr__())
 
@@ -150,14 +151,16 @@ class Model:
     def __init__(self, shape, metric='chebyshev'):
         self.shape          = shape
         self.size           = np.zeros(shape).size
-        self.baseline       = 0.00
+        self.refractory     = epsilon
+        self.baseline       = 0.10
         self.threshold      = 0.50
-        self.stability      = 0.99
         self.amplitude      = 0.50
+        self.stability      = 0.99
         self.plasticity     = 0.05
-        self.potential      = np.zeros(self.shape).flatten()
+        self.potential      = self.baseline * np.ones(self.shape).flatten()
         self.position       = np.array([i for i in np.ndindex(self.shape)])
         self.neuron         = np.arange(self.position.shape[0])
+        # this guy is a problem since it scales with the square of the input size
         self.distance       = squareform(pdist(self.position, metric))
         # A list of adjacent neurons for each neuron.
         # e.g. adjacent[0] is a list of neuron indexes that are exactly 1 unit away from position[0]
@@ -200,35 +203,41 @@ class Model:
         new_affinities = self.affinities.copy()
         new_potential = self.potential.copy()
         activated = self.potential > self.threshold
-        # Set activated potentials back to baseline value
-        new_potential[activated] = self.baseline
+        # Set activated potentials back to refactory value
+        new_potential[activated] = self.refractory
         # Increase output neuron potentials
         new_potential[self.outputs[activated]] += self.amplitude * self.affinities[activated]
         # Update activated neuron affinities
-        # TODO: clamp values to [epsilon,1] or some other gradient management
         new_affinities[activated] += self.plasticity * (1 + new_potential[self.outputs[activated]] - self.threshold)
         new_potential *= self.stability
         # Push the update
-        self.potential = new_potential
-        self.affinities = new_affinities
+        self.potential = new_potential.clip(epsilon, 1-epsilon)
+        self.affinities = new_affinities.clip(epsilon, 1-epsilon)
 
 def run(model, iterations):
     np.set_printoptions(linewidth=200)
     banner("RUN BEGINS")
     # FIXME: hack to get some activated neurons
-    model.potential[12] = 0.8
-    model.potential[13] = 0.6
+    # model.potential[12] = 0.8
+    # model.potential[13] = 0.6
     # model.potential[9:11] = 1
-    ndbg(model.potential.copy().reshape(model.shape), "inital pot")
-    ndbg(model.outputs[12], "outputs[12]")
-    ndbg(model.outputs[13], "outputs[13]")
+    # ndbg(model.potential.copy().reshape(model.shape), "inital pot")
+    # ndbg(model.position[model.outputs[12,4]], "outputs[12]")
+    # ndbg(model.position[model.outputs[13,4]], "outputs[13]")
     for _ in range(iterations):
+        model.potential[rng.integers(0, model.size)] = 0.8
         model.update()
-        ndbg(model.potential.copy().reshape(model.shape), "new pot")
-        ndbg(model.affinities, "new aff")
+        # ndbg(model.potential.copy().reshape(model.shape), "new pot")
+        # ndbg(model.affinities, "new aff")
+        cv2.imshow("model",cv2.resize(model.potential.reshape(shape), (512,512), interpolation=cv2.INTER_NEAREST))
+        cv2.waitKey(20)
+    cv2.waitKey(0)
 
-run(model=Model((5,5)), iterations=4)
 
+# Run the model
+shape = (64, 64)
+iterations = 10000
+model=Model(shape)
 
-# cv2.imshow("img", image_sensor())
-# cv2.waitKey(0)
+run(model, iterations)
+
