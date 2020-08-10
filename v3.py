@@ -131,7 +131,8 @@ class Defaults:
 # potential[n] *= (1 - stability[n])                                                # this one will require some tuning
 
 rng = np.random.default_rng()
-epsilon = 1e-5
+epsilon = 0.005
+
 def reprnd(arr, name="arr"):
     return "-------------------------------\n{}: {}\n{}\n".format(name, arr.shape, arr.__repr__())
 
@@ -148,15 +149,15 @@ def banner(text):
 class Model:
     ''' A spiking neural net model. 
     '''
-    def __init__(self, shape, metric='chebyshev'):
+    def __init__(self, shape, metric='cityblock'):
         self.shape          = shape
         self.size           = np.zeros(shape).size
         self.refractory     = epsilon
         self.baseline       = 0.10
         self.threshold      = 0.50
-        self.amplitude      = 0.50
+        self.amplitude      = 0.20
         self.stability      = 0.99
-        self.plasticity     = 0.05
+        self.plasticity     = 0.005
         self.potential      = self.baseline * np.ones(self.shape).flatten()
         self.position       = np.array([i for i in np.ndindex(self.shape)])
         self.neuron         = np.arange(self.position.shape[0])
@@ -170,7 +171,7 @@ class Model:
                                     # This is required so that the output arrays are all the same size for numpy.
                                         if np.mod(self.position[n], np.array(self.shape) - 1).all()])
         self.outputs        = rng.choice(adjacents, self.neuron.size)
-        self.affinities     = 0.50 * np.ones(self.outputs.shape)
+        self.affinities     = np.ones(self.outputs.shape)
 
     def __repr__(self):
         return "{}\n{}".format(
@@ -204,15 +205,45 @@ class Model:
         new_potential = self.potential.copy()
         activated = self.potential > self.threshold
         # Set activated potentials back to refactory value
+        show(new_potential, new_affinities)
         new_potential[activated] = self.refractory
         # Increase output neuron potentials
+        show(new_potential, new_affinities)
         new_potential[self.outputs[activated]] += self.amplitude * self.affinities[activated]
-        # Update activated neuron affinities
-        new_affinities[activated] += self.plasticity * (1 + new_potential[self.outputs[activated]] - self.threshold)
+        show(new_potential, new_affinities)
+        # ndbg(self.outputs[activated,:],"out ac")
+        # ndbg(new_affinities[self.outputs[activated,:]],"aff out")
+        # ndbg((1 - self.plasticity) * (1 + new_potential[self.outputs[activated,:]] - self.threshold),"out pot upd")
+        for o in range(self.outputs[activated].shape[1]):
+            # ndbg(new_affinities[self.outputs[activated, o]] ,"aff out ac")
+            # Without this loop the broadcast wouldn't work, this is what we are trying to do...
+            # [act-idx, out-idx, aff] *= [act-idx, out-pot]
+            # The size of output potentials is the same as the affinities since they are directly correlated.
+            # Neuron n has:
+            # [o0, o1, o2, ..., oN] output neurons,
+            # [a0, a1, a2, ..., aN] associated affinities
+            # So each output neuron also has (since they are neurons, duh):
+            # [a0, a1, a2, ..., aN] associated affinities
+            # The size of N depends on the nb of outputs for each neuron which currently is based on the metric used to select outputs.
+            new_affinities[self.outputs[activated, o]] += self.plasticity * (new_potential[self.outputs[activated,:]] - self.threshold)
+
+        # ndbg(self.outputs[activated],"activated outputs")
+        # ndbg(new_affinities[activated],"new activated affinities")
+        show(new_potential, new_affinities)
         new_potential *= self.stability
+        show(new_potential, new_affinities)
         # Push the update
         self.potential = new_potential.clip(epsilon, 1-epsilon)
         self.affinities = new_affinities.clip(epsilon, 1-epsilon)
+
+def show(potential, affinities, duration=0):
+    cv2.imshow("potenital",cv2.resize(potential.reshape(shape), (512,512), interpolation=cv2.INTER_NEAREST))
+    cv2.imshow("affinities",cv2.resize(affinities[:,4].reshape(shape), (512,512), interpolation=cv2.INTER_NEAREST))
+    cv2.moveWindow("potenital", 50, 200)
+    cv2.moveWindow("affinities", 600, 200)
+    ndbg(potential.reshape(shape), "potentials")
+    ndbg(affinities, "affinities")
+    cv2.waitKey(duration)
 
 def run(model, iterations):
     np.set_printoptions(linewidth=200)
@@ -226,16 +257,15 @@ def run(model, iterations):
     # ndbg(model.position[model.outputs[13,4]], "outputs[13]")
     for _ in range(iterations):
         model.potential[rng.integers(0, model.size)] = 0.8
+        model.potential[rng.integers(0, model.size)] = 0.8
         model.update()
         # ndbg(model.potential.copy().reshape(model.shape), "new pot")
         # ndbg(model.affinities, "new aff")
-        cv2.imshow("model",cv2.resize(model.potential.reshape(shape), (512,512), interpolation=cv2.INTER_NEAREST))
-        cv2.waitKey(20)
     cv2.waitKey(0)
 
 
 # Run the model
-shape = (64, 64)
+shape = (4, 4)
 iterations = 10000
 model=Model(shape)
 
