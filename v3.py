@@ -149,7 +149,7 @@ def banner(text):
 class Model:
     ''' A spiking neural net model. 
     '''
-    def __init__(self, shape, metric='cityblock'):
+    def __init__(self, shape, metric='chebyshev'):
         self.shape          = shape
         self.size           = np.zeros(shape).size
         self.refractory     = epsilon
@@ -236,13 +236,13 @@ class Model:
         self.potential = new_potential.clip(epsilon, 1-epsilon)
         self.affinities = new_affinities.clip(epsilon, 1-epsilon)
 
-def show(potential, affinities, duration=0):
-    cv2.imshow("potenital",cv2.resize(potential.reshape(shape), (512,512), interpolation=cv2.INTER_NEAREST))
-    cv2.imshow("affinities",cv2.resize(affinities[:,4].reshape(shape), (512,512), interpolation=cv2.INTER_NEAREST))
+def show(potential, affinities, duration=1, debug=False):
+    cv2.imshow("potenital",cv2.resize(np.hstack((potential.reshape(shape), affinities[:,4].reshape(shape))), (1024,512), interpolation=cv2.INTER_NEAREST))
+    # cv2.imshow("affinities",cv2.resize(affinities[:,4].reshape(shape), (512,512), interpolation=cv2.INTER_NEAREST))
     cv2.moveWindow("potenital", 50, 200)
-    cv2.moveWindow("affinities", 600, 200)
-    ndbg(potential.reshape(shape), "potentials")
-    ndbg(affinities, "affinities")
+    if debug:
+        ndbg(potential.reshape(shape), "potentials")
+        ndbg(affinities, "affinities")
     cv2.waitKey(duration)
 
 def run(model, iterations):
@@ -250,14 +250,14 @@ def run(model, iterations):
     banner("RUN BEGINS")
     # FIXME: hack to get some activated neurons
     # model.potential[12] = 0.8
-    # model.potential[13] = 0.6
     # model.potential[9:11] = 1
     # ndbg(model.potential.copy().reshape(model.shape), "inital pot")
     # ndbg(model.position[model.outputs[12,4]], "outputs[12]")
     # ndbg(model.position[model.outputs[13,4]], "outputs[13]")
     for _ in range(iterations):
-        model.potential[rng.integers(0, model.size)] = 0.8
-        model.potential[rng.integers(0, model.size)] = 0.8
+        if _ == 1:
+            cv2.waitKey(0)
+        model.potential[rng.integers(0, model.size,10)] = 0.8
         model.update()
         # ndbg(model.potential.copy().reshape(model.shape), "new pot")
         # ndbg(model.affinities, "new aff")
@@ -265,7 +265,7 @@ def run(model, iterations):
 
 
 # Run the model
-shape = (4, 4)
+shape = (64, 64)
 iterations = 10000
 model=Model(shape)
 
