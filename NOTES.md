@@ -47,3 +47,23 @@ Neurons:
 
 If we consider a simple neuron model that holds some state and can send a spike impulse we see that it is not so different from a collection of entities defined above.
 Hopefully we can adjust the environment parameters sufficiently to see this spiking behaviour from clusters of entities.
+
+# Spiking Model by Izhikevich (2003)
+
+v' = 0.04v^2 + 5v + 140 - u + I           (1)
+u' = a(bv - u)                            (2)
+if v >= 30 then { v = c, u = u + d }      (3)
+
+Here variable v represents the membrane potential of the neuron 
+and u represents a membrane recovery variable.
+After the spike reaches its apex 30mV, the membrane voltage and the 
+recovery variable are reset according to the (3). 
+If v skips over 30, then it first is reset to 30, and then to c so 
+that all spikes have equal magnitudes.
+The quadratic part is chosen so that has mV scale and the time has ms scale. 
+It takes only 13 floating point operation to simulate 1ms of the model,
+so it is quite efficient in large-scale simulations of cortical networks.
+When (a,b,c,d) = (0.2, 2, -56, -16) and I = -99and, the model has chaotic spiking activity,
+though the integration time step should be small to achieve adequate numerical precision.
+We stress that 30mV in (3) is not a threshold, but the peak of the spike.
+The threshold value of the model neuron is between –70 and -50, and it is dynamic, as in biological neurons.

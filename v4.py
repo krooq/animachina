@@ -74,7 +74,7 @@ class Model:
         self.threshold      = 0.50
         self.amplitude      = 0.10
         self.stability      = 0.99
-        self.reuptake       = 0.10
+        self.reuptake       = 0.000
         self.plasticity     = 0.005
         self.potential      = self.baseline * np.ones(self.shape).flatten()
         self.position       = np.array([i for i in np.ndindex(self.shape)])
@@ -165,8 +165,13 @@ class Model:
 
 
 def show(potential, input_weights, duration=1, debug=False):
-    cv2.imshow("potenital",cv2.resize(np.hstack((potential.reshape(shape), input_weights[:,4].reshape(shape))), (1024, 512), interpolation=cv2.INTER_NEAREST))
-    cv2.moveWindow("potenital", 50, 700)
+    cv2.imshow("potenital", cv2.resize(potential.reshape(shape), (256, 256), interpolation=cv2.INTER_NEAREST))
+    weights_image = np.vstack((
+            np.hstack((input_weights[:,0].reshape(shape),input_weights[:,1].reshape(shape),input_weights[:,2].reshape(shape))),
+            np.hstack((input_weights[:,3].reshape(shape),input_weights[:,4].reshape(shape),input_weights[:,5].reshape(shape))),
+            np.hstack((input_weights[:,6].reshape(shape),input_weights[:,7].reshape(shape),input_weights[:,8].reshape(shape)))
+    ))
+    cv2.imshow("input_weights", cv2.resize(weights_image, (768, 768), interpolation=cv2.INTER_NEAREST))
     if debug:
         ndbg(potential.reshape(shape), "potentials")
         ndbg(input_weights, "input_weights")
@@ -194,7 +199,7 @@ def cart_pole_actuator(active):
     return 1 if np.any(active) > 0.5 else 0
 
 # Run the model
-shape = (6, 6)
+shape = (32, 32)
 iterations = 10000
 model = Model(shape)
 inputs = np.array([[0,63],[63,63]])
@@ -202,20 +207,25 @@ inputs = np.array([[0,63],[63,63]])
 # run(model, iterations)
 
 def run_gym(env):
+
     neurons                         = model.neuron.reshape(model.shape)
-    sensor_neurons                  = neurons[[1,1,1,1],[1,2,3,4]]
-    actuator_neurons                = neurons[[4,4,4,4],[1,2,3,4]]
+    sensor_neurons                  = neurons[[2,2,2,2],[14,15,16,17]]
+    actuator_neurons                = neurons[20,np.arange(20)+2]
     activations                     = model.update()
+    show(model.potential, model.input_weights)
+    cv2.moveWindow("potenital", 50, 700)
+    cv2.moveWindow("input_weights", 350, 700)
 
     previous_episode_reward         = 0
     episode_reward                  = 0
     best_reward                     = 0
-    for i_episode in range(20):
+    for i_episode in range(10000):
         observation                 = env.reset()
         best_reward                 = max(episode_reward, best_reward)
         previous_episode_reward     = episode_reward
         episode_reward              = 0
         for t in range(100):
+            model.potential[rng.integers(0, model.size,32)] = 0.2
             env.render()
             # Sense
             model.sense(sensor_neurons, cart_pole_sensor(observation))
@@ -223,7 +233,6 @@ def run_gym(env):
             activations = model.update()
             # Act
             action = cart_pole_actuator(activations[actuator_neurons])
-            print(np.any(activations[actuator_neurons]))
             # Observe
             observation, reward, done, info = env.step(action)
             episode_reward += reward
