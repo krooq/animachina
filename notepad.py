@@ -14,3 +14,15 @@ def demo():
     plot_spikes(spikes)
     plot_voltages(voltages, plot_type="line")
     plt.show()
+
+
+def show_layers(self, title: str = "net", px: int = 50, duration: int = -1):
+    ''' Shows the net as a stack of layers. '''
+    width = max(t.numpy().size for t in self.layers)
+    img = [np.zeros(width) for _ in self.layers]
+    img = np.vstack(img)
+    for i,t in enumerate(self.layers):
+        img[i,:t.numpy().size] = t.numpy()
+    img_size = (px * width, px * len(self.layers))
+    cv2.imshow(title, cv2.resize(img, img_size, interpolation=cv2.INTER_NEAREST))
+    cv2.waitKey(duration)
