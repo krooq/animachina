@@ -2,6 +2,7 @@
 # but the clean API means it isn't very transparent
 # the goal of this version is to improve v4 (DIY) with ideas from v5 (BindsNET)
 # remember, we are not trying to create an API, just a powerful generic SNN
+from abc import abstractclassmethod
 from typing import Callable, Dict
 from bindsnet.learning.learning import LearningRule
 import torch as torch
@@ -9,6 +10,7 @@ import cv2
 import numpy as np
 from torch import tensor
 from util import *
+import gym
 
 epsilon         = 0.05
 baseline        = 0.10
@@ -22,17 +24,17 @@ refractory      = epsilon
 Id = int
 
 class Node:
-    def __init__(self, id: Id, label: str = None) -> None:
+    def __init__(self, id: Id, label: str = None):
         self.id = id
         self.label = label
 
 class Layer(Node):
-    def __init__(self, id: Id, neurons: torch.Tensor) -> None:
+    def __init__(self, id: Id, neurons: torch.Tensor):
         super().__init__(id, "layer_{}".format(id))
         self.neurons = neurons
 
 class Connection(Node):
-    def __init__(self, id: Id, source: Layer, target: Layer, weight: torch.Tensor, update) -> None:
+    def __init__(self, id: Id, source: Layer, target: Layer, weight: torch.Tensor, update):
         super().__init__(id, "connection_{} [{} to {}]".format(id, source.label, target.label))
         self.source = source
         self.target = target
@@ -69,25 +71,57 @@ class Net:
         cv2.waitKey(duration)
 
     def update(self):
-        pass
+        for cxn in self.connections.values():
+            cxn.update(cxn)
 
+class Agent:
+    def __init__(self, observation_space: gym.Space, action_space: gym.Space):
+        self.observation_space = observation_space
+        self.action_space = action_space
 
+    @abstractclassmethod
+    def observe(self, observation):
+        raise NotImplementedError
 
-def run_gym(env_name: str, nb_eps: int, nb_timesteps: int, net: Net):
-    import gym
-    env = gym.make(env_name)
+    @abstractclassmethod
+    def act(self) -> torch.Tensor:
+        raise NotImplementedError
+
+class Sensor:
+    @abstractclassmethod
+    def observe(self, observation):
+        raise NotImplementedError
+    
+class Actuator:
+    @abstractclassmethod
+    def act(self) -> object:
+        raise NotImplementedError
+
+class BreakoutAgent(Agent):    
+    def __init__(self, observation_space: gym.Space, action_space: gym.Space, sensor: Sensor, actuator: Actuator):
+        self.observation_space = observation_space
+        self.action_space = action_space
+        self.sensor = sensor
+        self.acuator = actuator
+
+    def observe(self, observation):
+        self.sensor.observe(observation)
+
+    def act(self) -> object:
+        return self.acuator.act()
+
+def run_gym(env: gym.Env, nb_eps: int, nb_timesteps: int, agent: Agent):
     best_reward = None
     # Start training regime
     for i_ep in range(nb_eps):
         observation = env.reset()
         episode_reward = 0
         best_reward = max(episode_reward, best_reward or episode_reward)
-        print(best_reward)
         # Start training episode
         for i_ts in range(nb_timesteps):
             env.render()
-            net.input(observation)
-            action = net.output()
+            agent.observe(observation)
+            action = agent.act()
             observation, reward, done, info = env.step(action)
             episode_reward += reward
             if done:
@@ -96,11 +130,45 @@ def run_gym(env_name: str, nb_eps: int, nb_timesteps: int, net: Net):
     print("Session complete, best reward {}".format(best_reward))
     env.close()
 
+class AtariVision(Sensor):
+    def __init__(self, net: Net, input_layer: Layer) -> None:
+        self.net = net
+        self.input_layer = input_layer
+        self.img_max = 255
+        # self.previous_img = 0
+
+    def observe(self, observation):
+        img = cv2.cvtColor(observation, cv2.COLOR_BGR2GRAY)
+        self.input_layer.neurons += img.reshape(img.size)/ self.img_max
+        # dimg = np.maximum(img - self.previous_img, 0)
+        cv2.imshow('', self.input_layer.neurons.numpy().reshape((210,160)))
+        net.update()
+        # cv2.waitKey(0)
+        # self.previous_img = img
+
+class BreakoutActuator(Actuator):
+    def act(self) -> object:
+        return 1
+
+def integrate_and_fire(cxn: Connection):
+    activated = cxn.source.neurons > threshold
+    nb_activated = (activated).size(0)
+    cxn.target.neurons += nb_activated
+    cxn.source.neurons[activated] = 0
+
+###############################################################################
+###############################################################################
+###############################################################################
+###############################################################################
+###############################################################################
 
 net = Net()
-a   = net.add(20)
-b   = net.add(30)
-c   = net.add(5)
-a_b = net.connect(c,a)
+a   = net.add(210*160)
+b   = net.add(10)
+c   = net.add(4)
+a_b = net.connect(a,b,integrate_and_fire)
 
-run_gym('CartPole-v0', 1, 1, net)
+env = gym.make('BreakoutDeterministic-v4')
+agent = BreakoutAgent(env.observation_space, env.action_space, AtariVision(net, a), BreakoutActuator())
+
+run_gym(env, 10, 100, agent)

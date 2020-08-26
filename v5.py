@@ -28,7 +28,7 @@ class Net(Network):
 
 # Model
 net = Net()
-layer_0 = net.add_layer(Input(n=80 * 80, shape=[1,1,1,80, 80]), 'layer_0')
+layer_0 = net.add_layer(Input(n=80 * 80, shape=[1,1,1, 80, 80]), 'layer_0')
 layer_1 = net.add_layer(LIFNodes(n=10, traces=True), 'layer_1')
 layer_2 = net.add_layer(LIFNodes(n=4, traces=True, refrac=0,), 'layer_2')
 cxn_0_1 = net.add_connection(Connection(layer_0, layer_1, wmin=0, wmax=1))
@@ -60,7 +60,7 @@ for i in range(100):
     while not is_done:
         result = pipeline.env_step()
         pipeline.step(result)
-        print(mon_0_1.get("v").numpy())
+        print(mon_0_1.get("v").numpy().shape)
         # cv2.imshow("input_weights", cv2.resize(mon_0_1.get("v").numpy().reshape(10,100), (256, 256), interpolation=cv2.INTER_NEAREST))
         mon_0_1.reset_state_variables()
         reward = result[1]

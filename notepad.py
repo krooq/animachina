@@ -26,3 +26,4 @@ def show_layers(self, title: str = "net", px: int = 50, duration: int = -1):
     img_size = (px * width, px * len(self.layers))
     cv2.imshow(title, cv2.resize(img, img_size, interpolation=cv2.INTER_NEAREST))
     cv2.waitKey(duration)
+
