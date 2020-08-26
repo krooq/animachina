@@ -28,14 +28,15 @@ class Net(Network):
 
 # Model
 net = Net()
-layer_0 = net.add_layer(Input(n=4, traces=True), 'layer_0')
+layer_0 = net.add_layer(Input(n=80 * 80, shape=[1,1,1,80, 80]), 'layer_0')
 layer_1 = net.add_layer(LIFNodes(n=10, traces=True), 'layer_1')
-layer_2 = net.add_layer(LIFNodes(n=2, traces=True, refrac=0,), 'layer_2')
+layer_2 = net.add_layer(LIFNodes(n=4, traces=True, refrac=0,), 'layer_2')
 cxn_0_1 = net.add_connection(Connection(layer_0, layer_1, wmin=0, wmax=1))
 cxn_1_2 = net.add_connection(Connection(layer_1, layer_2, wmin=0, wmax=1, update_rule=MSTDP, nu=1e-1, norm=0.5 * layer_1.n))
+mon_0_1 = net.add_monitor(Monitor(layer_1, ("v",)), 'mon_0_1')
 
 # Load the gym environment.
-env = GymEnvironment('CartPole-v0')
+env = GymEnvironment('BreakoutDeterministic-v4')
 env.reset()
 
 # Build pipeline from specified components.
@@ -43,12 +44,14 @@ pipeline = EnvironmentPipeline(
     net,
     env,
     action_function=select_softmax,
-    num_episodes=100,
+    encoding=bernoulli,
+    # num_episodes=100,
     output=layer_2.name,
     render_interval=1,
     reward_delay=None,
-    time=1,
+    time=100,
 )
+import cv2
 
 for i in range(100):
     total_reward = 0
@@ -57,7 +60,9 @@ for i in range(100):
     while not is_done:
         result = pipeline.env_step()
         pipeline.step(result)
-
+        print(mon_0_1.get("v").numpy())
+        # cv2.imshow("input_weights", cv2.resize(mon_0_1.get("v").numpy().reshape(10,100), (256, 256), interpolation=cv2.INTER_NEAREST))
+        mon_0_1.reset_state_variables()
         reward = result[1]
         total_reward += reward
 
