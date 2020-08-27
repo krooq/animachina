@@ -3,6 +3,7 @@
 # the goal of this version is to improve v4 (DIY) with ideas from v5 (BindsNET)
 # remember, we are not trying to create an API, just a powerful generic SNN
 from abc import abstractclassmethod
+import time
 from typing import Callable, Dict
 from bindsnet.learning.learning import LearningRule
 import torch as torch
@@ -12,9 +13,11 @@ from torch import tensor
 from util import *
 import gym
 
+threshold       = 1.00
+
+dt              = 1.0
 epsilon         = 0.05
 baseline        = 0.10
-threshold       = 0.50
 amplitude       = 0.10
 stability       = 0.99
 reuptake        = 0.000
@@ -134,18 +137,20 @@ class AtariVision(Sensor):
     def __init__(self, net: Net, input_layer: Layer) -> None:
         self.net = net
         self.input_layer = input_layer
-        self.img_max = 255
-        # self.previous_img = 0
+        self.previous_img = 0
+        self.sensitivity = threshold / 255
+        self.frequency = 10
+        self.leakiness = 0.2
+        self.size = (210,160)
+        
 
     def observe(self, observation):
-        img = cv2.cvtColor(observation, cv2.COLOR_BGR2GRAY)
-        self.input_layer.neurons += img.reshape(img.size)/ self.img_max
-        # dimg = np.maximum(img - self.previous_img, 0)
-        cv2.imshow('', self.input_layer.neurons.numpy().reshape((210,160)))
-        net.update()
-        # cv2.waitKey(0)
-        # self.previous_img = img
-
+        img = cv2.cvtColor(observation, cv2.COLOR_BGR2GRAY).flatten()
+        for _ in range(self.frequency):
+            self.input_layer.neurons += img * self.sensitivity - self.input_layer.neurons.numpy() * self.leakiness
+            net.update()
+            cv2.imshow('', self.input_layer.neurons.numpy().reshape(self.size))
+            
 class BreakoutActuator(Actuator):
     def act(self) -> object:
         return 1
@@ -155,6 +160,7 @@ def integrate_and_fire(cxn: Connection):
     nb_activated = (activated).size(0)
     cxn.target.neurons += nb_activated
     cxn.source.neurons[activated] = 0
+
 
 ###############################################################################
 ###############################################################################
