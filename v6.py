@@ -16,10 +16,10 @@ import gym
 
 
 threshold       = 0.80
+baseline        = 0.10
 
 dt              = 1.0
 epsilon         = 0.05
-baseline        = 0.10
 amplitude       = 0.10
 stability       = 0.99
 reuptake        = 0.000
@@ -29,16 +29,19 @@ refractory      = epsilon
 Id = int
 
 class Node:
+    ''' A component of a neural network. '''
     def __init__(self, id: Id, label: str = None):
         self.id = id
         self.label = label
 
 class Layer(Node):
+    ''' A group of neurons. '''
     def __init__(self, id: Id, neurons: torch.Tensor):
         super().__init__(id, "layer_{}".format(id))
         self.neurons = neurons
 
 class Connection(Node):
+    ''' A connection between groups of neurons. '''
     def __init__(self, id: Id, source: Layer, target: Layer, weight: torch.Tensor, update):
         super().__init__(id, "connection_{} [{} to {}]".format(id, source.label, target.label))
         self.source = source
@@ -53,15 +56,19 @@ class Net:
 
     def add(self, n: int = 1) -> Layer:
         ''' Adds a new layer of neurons. '''
-        layer = Layer(len(self.layers), torch.zeros(n))
+        id = len(self.layers)
+        neurons = torch.zeros(n)
+        layer = Layer(id, neurons)
         self.layers[layer.id] = layer
         return layer
 
     def connect(self, source: Layer, target: Layer, update) -> Connection:
         ''' Adds a new connection between layers. '''
-        rows        = source.neurons.size(0)
-        cols        = target.neurons.size(0)
-        connection  = Connection(len(self.connections), source, target, torch.zeros((rows, cols)), update)
+        id = len(self.connections)
+        rows = target.neurons.numel()
+        cols = source.neurons.numel()
+        weight = torch.ones((rows, cols))
+        connection = Connection(id, source, target, weight, update)
         self.connections[connection.id] = connection
         return connection
 
@@ -89,6 +96,10 @@ class Agent:
         raise NotImplementedError
 
     @abstractclassmethod
+    def reward(self, reward):
+        raise NotImplementedError
+
+    @abstractclassmethod
     def act(self) -> torch.Tensor:
         raise NotImplementedError
 
@@ -103,17 +114,20 @@ class Actuator:
         raise NotImplementedError
 
 class BreakoutAgent(Agent):    
-    def __init__(self, observation_space: gym.Space, action_space: gym.Space, sensor: Sensor, actuator: Actuator):
-        self.observation_space = observation_space
-        self.action_space = action_space
+    def __init__(self, sensor: Sensor, actuator: Actuator, reward_sensor: Sensor):
         self.sensor = sensor
         self.acuator = actuator
+        self.reward_sensor = reward_sensor
 
     def observe(self, observation):
         self.sensor.observe(observation)
 
+    def reward(self, reward) -> object:
+        return self.reward_sensor.observe(reward)
+
     def act(self) -> object:
         return self.acuator.act()
+    
 
 def run_gym(env: gym.Env, nb_eps: int, nb_timesteps: int, agent: Agent):
     best_reward = None
@@ -128,6 +142,7 @@ def run_gym(env: gym.Env, nb_eps: int, nb_timesteps: int, agent: Agent):
             agent.observe(observation)
             action = agent.act()
             observation, reward, done, info = env.step(action)
+            agent.reward(reward)
             episode_reward += reward
             if done:
                 print("Episode finished after {} timesteps".format(i_ts + 1))
@@ -163,13 +178,39 @@ class BreakoutActuator(Actuator):
         # select softmax function
         return torch.multinomial(torch.softmax(self.layer.neurons, dim=0), num_samples=1).item()
 
+class BreakoutReward(Sensor):
+    def __init__(self, net: Net, layer: Layer):
+        self.net = net
+        self.layer = layer
+        
+    def observe(self, reward):
+        # for cxn in self.net.connections.values():
+        #     cxn.weight = torch.softmax((cxn.weight*cxn.weight).flatten(), dim=0).reshape(cxn.weight.shape)
+        pass
+
+
+# TODO: encoders instead of sensors
+# def atari_vision(layer: Layer, img: np.ndarray):
+#     img = torch.tensor(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY).flatten(), dtype=torch.float32)
+#     layer.neurons += img / 255
+
 def integrate_and_fire(cxn: Connection):
-    activated = cxn.source.neurons > threshold
-    nb_activated = activated.nonzero().size(0)
-    cxn.target.neurons += nb_activated / cxn.source.neurons.size(0)
-    cxn.source.neurons[activated] = 0
-    if cxn.target.neurons.size(0) == 9:
-        cv2.imshow('', scale_aspect(cxn.target.neurons.numpy().reshape((3,3)), 210, 50))
+    source_active = cxn.source.neurons > threshold
+    spikes = torch.where(source_active, torch.tensor(threshold)/source_active.numel(), torch.tensor(0.0))
+    cxn.target.neurons += torch.matmul(cxn.weight, spikes)
+    target_active = cxn.target.neurons > threshold
+    weight_relevant = torch.einsum('i,j->ij', target_active.float(), source_active.float()).bool()
+    # NOTE: rewards should be based on reward prediction error, i.e. RPE
+    # simply put, this means weights should change relative to current weights
+    # weights supporting the result should increase
+    # weights against the result should decrease
+    positive_weight_factor = torch.tensor(torch.sum(weight_relevant).float() / weight_relevant.numel())
+    print(positive_weight_factor)
+    negative_weight_factor = positive_weight_factor - 1
+    cxn.weight += torch.where(weight_relevant, positive_weight_factor, negative_weight_factor)
+    # cxn.weight = torch.softmax(cxn.weight.flatten(), dim=0).reshape(cxn.weight.shape)
+    cxn.source.neurons[source_active] = baseline
+    cv2.imshow(cxn.label, cv2.resize(cxn.weight.numpy(), (512, 128), interpolation=cv2.INTER_NEAREST))
 
 ###############################################################################
 ###############################################################################
@@ -185,6 +226,6 @@ a_b = net.connect(a, b, integrate_and_fire)
 b_c = net.connect(b, c, integrate_and_fire)
 
 env = gym.make('BreakoutDeterministic-v4')
-agent = BreakoutAgent(env.observation_space, env.action_space, AtariVision(net, a), BreakoutActuator(net, c))
+agent = BreakoutAgent(AtariVision(net, a), BreakoutActuator(net, c), BreakoutReward(net, a))
 
-run_gym(env, nb_eps=10, nb_timesteps=100, agent=agent)
+run_gym(env, nb_eps=1, nb_timesteps=10, agent=agent)
