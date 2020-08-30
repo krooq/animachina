@@ -13,7 +13,9 @@ from torch import tensor
 from util import *
 import gym
 
-threshold       = 1.00
+
+
+threshold       = 0.80
 
 dt              = 1.0
 epsilon         = 0.05
@@ -134,33 +136,40 @@ def run_gym(env: gym.Env, nb_eps: int, nb_timesteps: int, agent: Agent):
     env.close()
 
 class AtariVision(Sensor):
-    def __init__(self, net: Net, input_layer: Layer) -> None:
+    def __init__(self, net: Net, layer: Layer):
         self.net = net
-        self.input_layer = input_layer
+        self.layer = layer
         self.previous_img = 0
         self.sensitivity = threshold / 255
         self.frequency = 10
         self.leakiness = 0.2
         self.size = (210,160)
         
-
     def observe(self, observation):
-        img = cv2.cvtColor(observation, cv2.COLOR_BGR2GRAY).flatten()
+        img = torch.tensor(cv2.cvtColor(observation, cv2.COLOR_BGR2GRAY).flatten(), dtype=torch.float32)
         for _ in range(self.frequency):
-            self.input_layer.neurons += img * self.sensitivity - self.input_layer.neurons.numpy() * self.leakiness
+            # self.input_layer.neurons += img * self.sensitivity - self.input_layer.neurons.numpy() * self.leakiness
+            # add the new normalized image data 
+            self.layer.neurons += img / 255
+            # cv2.imshow('', scale_aspect(self.input_layer.neurons.numpy().reshape((210,160)), 256, 1))
             net.update()
-            cv2.imshow('', self.input_layer.neurons.numpy().reshape(self.size))
-            
+
 class BreakoutActuator(Actuator):
+    def __init__(self, net: Net, layer: Layer):
+        self.net = net
+        self.layer = layer
+
     def act(self) -> object:
-        return 1
+        # select softmax function
+        return torch.multinomial(torch.softmax(self.layer.neurons, dim=0), num_samples=1).item()
 
 def integrate_and_fire(cxn: Connection):
     activated = cxn.source.neurons > threshold
-    nb_activated = (activated).size(0)
-    cxn.target.neurons += nb_activated
+    nb_activated = activated.nonzero().size(0)
+    cxn.target.neurons += nb_activated / cxn.source.neurons.size(0)
     cxn.source.neurons[activated] = 0
-
+    if cxn.target.neurons.size(0) == 9:
+        cv2.imshow('', scale_aspect(cxn.target.neurons.numpy().reshape((3,3)), 210, 50))
 
 ###############################################################################
 ###############################################################################
@@ -170,11 +179,12 @@ def integrate_and_fire(cxn: Connection):
 
 net = Net()
 a   = net.add(210*160)
-b   = net.add(10)
+b   = net.add(9)
 c   = net.add(4)
-a_b = net.connect(a,b,integrate_and_fire)
+a_b = net.connect(a, b, integrate_and_fire)
+b_c = net.connect(b, c, integrate_and_fire)
 
 env = gym.make('BreakoutDeterministic-v4')
-agent = BreakoutAgent(env.observation_space, env.action_space, AtariVision(net, a), BreakoutActuator())
+agent = BreakoutAgent(env.observation_space, env.action_space, AtariVision(net, a), BreakoutActuator(net, c))
 
-run_gym(env, 10, 100, agent)
+run_gym(env, nb_eps=10, nb_timesteps=100, agent=agent)
