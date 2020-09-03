@@ -27,3 +27,20 @@ def show_layers(self, title: str = "net", px: int = 50, duration: int = -1):
     cv2.imshow(title, cv2.resize(img, img_size, interpolation=cv2.INTER_NEAREST))
     cv2.waitKey(duration)
 
+
+
+def show(self, cxn: Connection, title: str = None, min_size:int = 256, scale: int = 20, duration: int = -1):
+    '''
+    Renders an cv2 image of the connection between 2 layers as a connectivity matrix.
+    In this matrix, the rows are the source neurons and the columns are the targets.
+    '''
+    title = title or cxn.label
+    img = scale_aspect(cxn.weight.numpy(), min_size, scale)
+    cv2.imshow(title, img)
+    cv2.waitKey(duration)
+
+    # update weights with the reward prediction error i.e. signed difference between actual and predicted
+    # target_active = cxn.target.neurons > threshold
+    # weight_mask = torch.einsum('i,j->ij', target_active.float(), source_active.float()).bool()
+    # reward_prediction_error = torch.max(cxn.weight)
+    # cxn.weight += weight_mask * reward_prediction_error

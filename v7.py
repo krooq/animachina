@@ -1,40 +1,23 @@
-# BindsNET is great in that it utilizes Pytorch and has a nice API
-# but the clean API means it isn't very transparent
-# the goal of this version is to improve v4 (DIY) with ideas from v5 (BindsNET)
-# remember, we are not trying to create an API, just a powerful generic SNN
-from abc import abstractclassmethod
-import time
-from typing import Callable, Dict
-from bindsnet.learning.learning import LearningRule
+# v7 builds on v6, still trying to make our own simple spiking neural net model like BindsNET
+# the goal of v7 is to adopt a temporal coding mechanism over the rate coding in v6
+
+from rl import Actuator, Agent, Id, Node, Sensor
+from typing import Dict
 import cv2
-import numpy as np
-from torch.types import Number
 from util import *
 import gym
 import torch as torch
 import torch.nn.functional as f
 
-
-
+###############################################################################
+# Globals
+###############################################################################
 threshold       = 0.80
 baseline        = 0.10
 
-dt              = 1.0
-epsilon         = 0.05
-amplitude       = 0.10
-stability       = 0.99
-reuptake        = 0.000
-plasticity      = 0.005
-refractory      = epsilon
-
-Id = int
-
-class Node:
-    ''' A component of a neural network. '''
-    def __init__(self, id: Id, label: str = None):
-        self.id = id
-        self.label = label
-
+###############################################################################
+# Types
+###############################################################################
 class Layer(Node):
     ''' A group of neurons. '''
     def __init__(self, id: Id, neurons: torch.Tensor):
@@ -76,45 +59,10 @@ class Net:
         self.connections[connection.id] = connection
         return connection
 
-    def show(self, cxn: Connection, title: str = None, min_size:int = 256, scale: int = 20, duration: int = -1):
-        '''
-        Renders an cv2 image of the connection between 2 layers as a connectivity matrix.
-        In this matrix, the rows are the source neurons and the columns are the targets.
-        '''
-        title = title or cxn.label
-        img = scale_aspect(cxn.weight.numpy(), min_size, scale)
-        cv2.imshow(title, img)
-        cv2.waitKey(duration)
-
     def update(self):
         for cxn in self.connections.values():
             cxn.update(cxn)
 
-class Sensor:
-    @abstractclassmethod
-    def obs(self, env):
-        raise NotImplementedError
-    
-class Actuator:
-    @abstractclassmethod
-    def act(self) -> object:
-        raise NotImplementedError
-
-class Agent:    
-    def __init__(self, sensor: Sensor, actuator: Actuator, reward_sensor: Sensor):
-        self.sensor = sensor
-        self.acuator = actuator
-        self.reward_sensor = reward_sensor
-
-    def observe(self, observation):
-        self.sensor.obs(observation)
-
-    def reward(self, reward) -> object:
-        return self.reward_sensor.obs(reward)
-
-    def act(self) -> object:
-        return self.acuator.act()
-    
 class AtariVision(Sensor):
     def __init__(self, net: Net, layer: Layer):
         self.net = net
@@ -151,71 +99,50 @@ class BreakoutReward(Sensor):
         # WIP
         for cxn in self.net.connections.values():
             # in breakout, reward is the number of broken blocks
-            simple_reward(cxn, reward)
+            reward_prediction_error = reward - cxn.reward
+            cxn.weight += 0.5 * reward_prediction_error * torch.mean(cxn.weight) * cxn.activations
+            # renormalize the weights
+            cxn.weight = f.normalize(cxn.weight, p=1, dim=1)
+            if cxn.id == 0:
+                if reward_prediction_error != 0:
+                    # print("max weight: {}".format(torch.max(cxn.weight)))
+                    # print("rpe: {}".format(reward_prediction_error))
+                    cv2.imshow('weights', (cxn.weight/torch.mean(cxn.weight)/10).reshape((210*4,160)).numpy())
+            cxn.reward = reward
 
-# TODO: encoders instead of sensors
-# def atari_vision(layer: Layer, img: np.ndarray):
-#     img = torch.tensor(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY).flatten(), dtype=torch.float32)
-#     layer.neurons += img / 255
-
-
+###############################################################################
+# Functions
+###############################################################################
 def integrate_and_fire(cxn: Connection):
     # find the spiking neurons, then update target neurons with weighted spikes
     source_active = cxn.source.neurons > threshold
     cxn.target.neurons += torch.matmul(cxn.weight, source_active.float())
-
     # find the target neurons that spike as a result of the update and record the activations of source and target
     target_active = cxn.target.neurons > threshold
     cxn.activations = torch.einsum('i,j->ij', target_active.float(), source_active.float()).bool()
-
     # reset the source neurons to baseline value
     cxn.source.neurons[source_active] = baseline
 
-    # FIXME: leaky?
-    # cxn.source.neurons = torch.clamp(cxn.source.neurons - 1e-2, baseline, 1.0)
-
-    # debug
-    # if cxn.id == 0:
-    #     # print(cxn.weight)
-    #     # if torch.max(cxn.weight) == 0: 
-    #     #     exit(1)
-    #     show(cxn.weight/torch.max(cxn.weight), shape=(210*9,160), label=cxn.label)
-
-def simple_reward(cxn: Connection, reward: Number):
-    reward_prediction_error = reward - cxn.reward
-    cxn.weight += 0.5 * reward_prediction_error * torch.mean(cxn.weight) * cxn.activations
-    # renormalize the weights
-    cxn.weight = f.normalize(cxn.weight, p=1, dim=1)
-    if cxn.id == 0:
-        if reward_prediction_error != 0:
-            # print("max weight: {}".format(torch.max(cxn.weight)))
-            # print("rpe: {}".format(reward_prediction_error))
-            cv2.imshow('weights', (cxn.weight/torch.mean(cxn.weight)/10).reshape((210*4,160)).numpy())
-    cxn.reward = reward
-
 
 ###############################################################################
+# Run
 ###############################################################################
-###############################################################################
-###############################################################################
-###############################################################################
+if __name__ == '__main__':
+    net = Net()
+    a   = net.add(210*160)
+    b   = net.add(4)
+    c   = net.add(4)
+    a_b = net.connect(a, b, integrate_and_fire)
+    b_c = net.connect(b, c, integrate_and_fire)
 
-net = Net()
-a   = net.add(210*160)
-b   = net.add(4)
-c   = net.add(4)
-a_b = net.connect(a, b, integrate_and_fire)
-b_c = net.connect(b, c, integrate_and_fire)
+    # debugging pytorch stuff
+    # source = torch.tensor([1, 0, 1, 0])
+    # target = torch.tensor([0, 0, 0])
+    # weight = torch.ones((3, 4))
+    # print(weight)
+    # print(f.normalize(weight, p=1, dim=1))
 
+    env = gym.make('BreakoutDeterministic-v4')
+    agent = Agent(AtariVision(net, a), BreakoutActuator(net, c), BreakoutReward(net, a))
 
-# source = torch.tensor([1, 0, 1, 0])
-# target = torch.tensor([0, 0, 0])
-# weight = torch.ones((3, 4))
-
-# print(weight)
-# print(f.normalize(weight, p=1, dim=1))
-
-env = gym.make('BreakoutDeterministic-v4')
-agent = Agent(AtariVision(net, a), BreakoutActuator(net, c), BreakoutReward(net, a))
-
-run_gym(env, agent, nb_eps=1000, nb_timesteps=1000)
+    run_gym(env, agent, nb_eps=1000, nb_timesteps=1000)
