@@ -1,5 +1,6 @@
 from abc import abstractclassmethod
 
+import gym
 
 class Sensor:
     @abstractclassmethod
@@ -12,25 +13,28 @@ class Actuator:
         raise NotImplementedError
 
 class Agent:    
-    def __init__(self, sensor: Sensor, actuator: Actuator, reward_sensor: Sensor):
-        self.sensor = sensor
-        self.acuator = actuator
-        self.reward_sensor = reward_sensor
+    def __init__(self, observe, act, reward):
+        self.observe = observe
+        self.act = act
+        self.reward = reward
 
-    def observe(self, observation):
-        self.sensor.obs(observation)
-
-    def reward(self, reward) -> object:
-        return self.reward_sensor.obs(reward)
-
-    def act(self) -> object:
-        return self.acuator.act()
-
-
-Id = int
-
-class Node:
-    ''' A component of a neural network. '''
-    def __init__(self, id: Id, label: str = None):
-        self.id = id
-        self.label = label
+def run_gym(env: gym.Env, agent: Agent, nb_eps: int, nb_timesteps: int):
+    best_reward = 0
+    # Start training regime
+    for ep in range(nb_eps):
+        observation = env.reset()
+        episode_reward = 0
+        # Start training episode
+        for dt in range(nb_timesteps):
+            env.render()
+            agent.observe(observation)
+            action = agent.act()
+            observation, reward, done, info = env.step(action)
+            agent.reward(reward)
+            episode_reward += reward
+            if done or dt == nb_timesteps:
+                print("Episode {} finished after {} timesteps with episode reward {}".format(ep, dt + 1, episode_reward))
+                break
+        best_reward = max(episode_reward, best_reward)
+    print("Session complete, best reward {}".format(best_reward))
+    env.close()
