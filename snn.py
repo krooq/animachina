@@ -1,7 +1,10 @@
 
 # Id for a network component
-from typing import List, TypeVar
+from typing import List, Tuple, TypeVar
 
+import numpy as np
+
+from util import show
 
 Id = int
 # The tensor type
@@ -26,7 +29,7 @@ class Connection(Node):
         self.source = source
         self.target = target
         self.weight = weight
-
+        
 class Network:
     def __init__(self):
         self.t: int = 0

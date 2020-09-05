@@ -18,7 +18,8 @@ class Agent:
         self.act = act
         self.reward = reward
 
-def run_gym(env: gym.Env, agent: Agent, nb_eps: int, nb_timesteps: int):
+def run_gym(env: str, agent: Agent, nb_eps: int, nb_timesteps: int):
+    env = gym.make(env)
     best_reward = 0
     # Start training regime
     for ep in range(nb_eps):

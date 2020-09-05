@@ -44,3 +44,35 @@ def show(self, cxn: Connection, title: str = None, min_size:int = 256, scale: in
     # weight_mask = torch.einsum('i,j->ij', target_active.float(), source_active.float()).bool()
     # reward_prediction_error = torch.max(cxn.weight)
     # cxn.weight += weight_mask * reward_prediction_error
+
+# create plot
+plt.ion()
+t = []
+v = []
+plt.show(block=False)
+# add data
+t.append(net.t)
+v.append(a.neurons.numpy()[210*70 + 80])
+plt.gca().cla()
+plt.plot(t, v)
+plt.draw()
+plt.pause(0.01)
+
+
+
+class Monitor(Node):
+    def __init__(self, id: Id, duration: int):
+        super().__init__(id, "monitor_{}".format(id))
+        self.v = np.zeros(duration)
+        self.t = np.arange(duration)
+    
+    def record(self, t: int, v: np.float):
+        self.v[t] = v
+
+    
+    def monitor(self, duration) -> Monitor:
+        id = len(self.monitors)
+        self.monitors[id] = Monitor(id, duration)
+        return self.monitors[id]
+
+        self.monitors: List[Monitor] = {}
